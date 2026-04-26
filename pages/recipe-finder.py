@@ -113,7 +113,12 @@ h1, h2, h3 {{
 # UI
 st.title("🔍 Recipe Finder")
 
-search_query = st.text_input("Search recipes...")
+with st.sidebar:
+    st.header("🔎 Filters")
+
+    search_query = st.text_input("Search recipes...")
+
+    show_adv = st.toggle("Show Advanced Filters")
 
 # Local Filtering
 filtered = df.copy()
@@ -124,8 +129,6 @@ if search_query:
     ]
 
 # Advanced Filters
-show_adv = st.toggle("Show Advanced Filters")
-
 if show_adv:
     st.subheader("🎛️ Advanced Filters")
 
@@ -168,7 +171,7 @@ else:
         st.plotly_chart(fig, use_container_width=True)
 
 # Gemini Output
-st.subheader("🤖 AI Recipe Suggestions")
+st.subheader("AI Recipe Suggestions")
 
 if search_query:
     with st.spinner("Generating recipes..."):
