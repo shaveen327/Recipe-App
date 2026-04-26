@@ -112,12 +112,10 @@ h1, h2, h3 {{
 
 # UI
 st.title("🔍 Recipe Finder")
+search_query = st.text_input("Search recipes...")
 
 with st.sidebar:
     st.header("🔎 Filters")
-
-    search_query = st.text_input("Search recipes...")
-
     show_adv = st.toggle("Show Advanced Filters")
 
 # Local Filtering
@@ -130,7 +128,7 @@ if search_query:
 
 # Advanced Filters
 if show_adv:
-    st.subheader("🎛️ Advanced Filters")
+    st.subheader("Advanced Filters")
 
     cal_range = st.slider("Calories", 200, 800, (200, 800))
     max_prep = st.slider("Max Prep Time (min)", 5, 60, 60)
@@ -152,7 +150,7 @@ sort_col, sort_asc = sort_map[st.session_state.sort_sel]
 filtered = filtered.sort_values(sort_col, ascending=sort_asc)
 
 # Display
-st.subheader("📊 Recipes")
+st.subheader("Recipes")
 
 if filtered.empty:
     st.warning("No recipes match your filters.")
