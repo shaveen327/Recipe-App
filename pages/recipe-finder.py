@@ -1,78 +1,112 @@
 import streamlit as st
-import pandas as pd
-import plotly.express as px
+import requests
 import google.generativeai as genai
 
-# Color Scheme
 PRIMARY = "#8fa98c"
 DARK = "#4a7a50"
 BG = "#b8ccb5"
 TEXT = "#1a1a1a"
 CREAM = "#f5f1e6"
 
-# Page
 st.set_page_config(
     page_title="Recipe Finder | Hoos Hungry?",
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# Session State Default
-if "sort_sel" not in st.session_state:
-    st.session_state.sort_sel = "Rating ↓"
+def get_spoonacular_key():
+    return st.secrets["api"]["SPOONACULAR_API_KEY"]
 
-# API Key
 def get_gemini_key():
     return st.secrets["api"]["GEMINI_API_KEY"]
 
-# Gemini Search
+with st.sidebar:
+    st.header("Advanced Settings")
+
+    max_prep = st.slider("Max Prep Time (minutes)", 5, 120, 60)
+    max_calories = st.slider("Max Calories", 200, 1500, 800)
+    number_results = st.slider("Number of Recipes", 1, 10, 5)
+
+    diet = st.selectbox(
+        "Diet Type",
+        ["None", "vegetarian", "vegan", "gluten free", "ketogenic"]
+    )
+
+    st.markdown("---")
+
 @st.cache_data(ttl=3600)
-def search_recipes(query):
+def search_recipes(query, max_prep, number_results, diet):
     try:
-        api_key = get_gemini_key()
-        genai.configure(api_key=api_key)
+        url = "https://api.spoonacular.com/recipes/complexSearch"
 
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
+        params = {
+            "query": query,
+            "number": number_results,
+            "addRecipeInformation": True,
+            "addRecipeNutrition": True,
+            "fillIngredients": True,
+            "maxReadyTime": max_prep,
+            "apiKey": get_spoonacular_key()
+        }
 
-        prompt = f"""
-        Give me 5 recipes for: {query}.
+        if diet != "None":
+            params["diet"] = diet
 
-        For each recipe include:
-        - Title
-        - Calories estimate
-        - Prep time
-        - Short description
-        """
+        response = requests.get(url, params=params, timeout=10)
 
-        response = model.generate_content(prompt)
-        return response.text, "ok"
+        if response.status_code == 401:
+            return None, "401"
+        if response.status_code == 404:
+            return None, "404"
+        if response.status_code == 429:
+            return None, "429"
+        if response.status_code >= 500:
+            return None, "500"
 
-    except KeyError:
-        return None, "missing_key"
+        data = response.json()
+
+        if not data.get("results"):
+            return None, "empty"
+
+        return data["results"], "ok"
+
+    except requests.exceptions.Timeout:
+        return None, "timeout"
     except Exception as e:
         return None, str(e)
 
-# Local Data
-@st.cache_data
-def load_recipe_data():
-    data = {
-        "Name": [
-            "Butter Chickpeas", "Mushroom Pasta", "Burrito Bowl",
-            "Fettuccine Alfredo", "Caesar Wrap"
-        ],
-        "Category": ["Dinner", "Dinner", "Lunch", "Dinner", "Lunch"],
-        "Calories": [450, 520, 610, 720, 480],
-        "Prep Time (min)": [30, 25, 20, 35, 10],
-        "Rating": [4.5, 4.2, 4.7, 4.1, 4.8],
-    }
-    return pd.DataFrame(data)
+@st.cache_data(ttl=3600)
+def generate_description(recipe, query):
+    try:
+        genai.configure(api_key=get_gemini_key())
+        model = genai.GenerativeModel("models/gemini-2.5-flash")
 
-df = load_recipe_data()
+        prompt = f"""
+You are a recipe description assistant.
 
-# Aesthetic
+RULES:
+- Write EXACTLY 3 sentences
+- Do NOT include ingredients or measurements
+- Do NOT add greetings or personality
+- Keep tone neutral and app-like
+
+Sentence 1: what the dish is  
+Sentence 2: why it's good for students  
+Sentence 3: taste/texture description
+
+User search: {query}
+
+Recipe:
+{recipe}
+"""
+
+        return model.generate_content(prompt).text
+
+    except Exception as e:
+        return f"Gemini error: {e}"
+
 st.markdown(f"""
 <style>
-
 html, body, [data-testid="stAppViewContainer"] {{
     background: {BG};
     color: {TEXT};
@@ -80,106 +114,117 @@ html, body, [data-testid="stAppViewContainer"] {{
 
 .stApp {{
     background: {BG};
-    color: {TEXT};
-}}
-
-.stTextInput > div > div > input {{
-    background: {CREAM};
-    color: {TEXT};
-}}
-
-.stDataFrame {{
-    background: {CREAM};
 }}
 
 .stButton > button {{
     background: {PRIMARY};
     color: white;
     border-radius: 10px;
-    border: none;
 }}
 
 .stButton > button:hover {{
     background: {DARK};
 }}
-
-h1, h2, h3 {{
-    color: {TEXT};
-}}
-
 </style>
 """, unsafe_allow_html=True)
 
-# UI
-st.title("🔍 Recipe Finder")
+st.title("Recipe Finder")
+
 search_query = st.text_input("Search recipes...")
 
-with st.sidebar:
-    st.header("🔎 Filters")
-    show_adv = st.toggle("Show Advanced Filters")
-
-# Local Filtering
-filtered = df.copy()
+st.subheader("Recipe Suggestions")
 
 if search_query:
-    filtered = filtered[
-        filtered["Name"].str.contains(search_query, case=False, na=False)
-    ]
 
-# Advanced Filters
-if show_adv:
-    st.subheader("Advanced Filters")
-
-    cal_range = st.slider("Calories", 200, 800, (200, 800))
-    max_prep = st.slider("Max Prep Time (min)", 5, 60, 60)
-
-    filtered = filtered[
-        (filtered["Calories"] >= cal_range[0]) &
-        (filtered["Calories"] <= cal_range[1]) &
-        (filtered["Prep Time (min)"] <= max_prep)
-    ]
-
-# Sorting
-sort_map = {
-    "Rating ↓": ("Rating", False),
-    "Calories ↑": ("Calories", True),
-    "Prep Time ↑": ("Prep Time (min)", True)
-}
-
-sort_col, sort_asc = sort_map[st.session_state.sort_sel]
-filtered = filtered.sort_values(sort_col, ascending=sort_asc)
-
-# Display
-st.subheader("Recipes")
-
-if filtered.empty:
-    st.warning("No recipes match your filters.")
-else:
-    st.dataframe(filtered, use_container_width=True)
-
-    if show_adv and not filtered.empty:
-        fig = px.scatter(
-            filtered,
-            x="Prep Time (min)",
-            y="Calories",
-            size="Rating",
-            color="Category",
-            text="Name"
+    with st.spinner("Fetching recipes..."):
+        recipes, status = search_recipes(
+            search_query,
+            max_prep,
+            number_results,
+            diet
         )
-        st.plotly_chart(fig, use_container_width=True)
 
-# Gemini Output
-st.subheader("AI Recipe Suggestions")
+    if status == "401":
+        st.error("API key invalid.")
+    elif status == "404":
+        st.error("No results found.")
+    elif status == "429":
+        st.error("Rate limit exceeded.")
+    elif status == "500":
+        st.error("Server error.")
+    elif status == "timeout":
+        st.error("Connection timeout.")
+    elif status == "empty":
+        st.warning("No recipes found.")
 
-if search_query:
-    with st.spinner("Generating recipes..."):
-        api_results, api_status = search_recipes(search_query)
+    elif status == "ok":
 
-    if api_status == "missing_key":
-        st.error("Missing GEMINI_API_KEY in secrets.toml")
-    elif api_status == "ok":
-        st.write(api_results)
-    else:
-        st.error(f"Error: {api_status}")
+        filtered_recipes = []
+
+        for r in recipes:
+            nutrients = r.get("nutrition", {}).get("nutrients", [])
+
+            calories = None
+            for n in nutrients:
+                if n.get("name") == "Calories":
+                    calories = n.get("amount")
+
+            if calories is None or calories <= max_calories:
+                r["calories"] = calories
+                filtered_recipes.append(r)
+
+        recipes = filtered_recipes
+
+        st.success("Recipes found!")
+
+        for r in recipes:
+
+            st.markdown(f"""
+### {r['title']}
+⏱ Prep Time: {r.get('readyInMinutes', 'N/A')} min  
+Calorie Amount: {r.get('calories', 'N/A')}
+""")
+
+            if r.get("image"):
+                st.image(r["image"], width=200)
+
+            with st.spinner("Generating description..."):
+                description = generate_description(r, search_query)
+
+            st.markdown("Description")
+            st.write(description)
+
+            ingredients = r.get("extendedIngredients", [])
+
+            if ingredients:
+                ingredient_text = " • ".join(
+                    [
+                        (ing.get("original") or ing.get("name"))
+                        for ing in ingredients
+                        if ing.get("original") or ing.get("name")
+                    ]
+                )
+
+                st.markdown("Ingredients:")
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        background:{CREAM};
+                        padding:10px 12px;
+                        border-radius:10px;
+                        line-height:1.6;
+                        font-size:13px;
+                    ">
+                        {ingredient_text}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            else:
+                st.caption("No ingredients available.")
+
+            st.markdown("---")
+
 else:
-    st.info("Search for a recipe to get AI suggestions.")
+    st.info("Search for a recipe to get results.")
