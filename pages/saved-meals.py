@@ -136,8 +136,19 @@ with left_col:
         st.caption("None set. Go to Settings.")
 
 with right_col:
+    total_meals = len(st.session_state.saved_meals)
+    total_rated = len(st.session_state.meal_ratings)
+    
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        st.metric("Meals Planned", total_meals) 
+    with col_m2:
+        st.metric("Meals Rated", total_rated)
+    
+    st.write("")
+    
     # Meal Ratings chart 
-    st.markdown("**📊 Meal Ratings**")
+    st.markdown("**Meal Ratings**")
     if st.session_state.meal_ratings:
         ratings_df = pd.DataFrame(
             list(st.session_state.meal_ratings.items()),
