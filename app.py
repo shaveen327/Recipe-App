@@ -90,8 +90,13 @@ with st.expander("👤  Account Details"):
     # Widget 3: text input for display name
     new_name = st.text_input("Display name", value=st.session_state.username, key="username_input")
     if st.button("Save name", key="save_name_btn"):
+        if new_name.strip() == "":
+            st.warning("Name cannot be empty.")
+            st.stop()
         st.session_state.username = new_name
-        st.write(f"✅ Name updated to **{new_name}**!")
+
+        st.toast("Name updated!")
+        st.success(f"Updated to {new_name}")
 
 #  Meal Preferences & Planning 
 with st.expander("🥗  Meal Preferences & Planning"):
@@ -110,3 +115,4 @@ with st.expander("🥗  Meal Preferences & Planning"):
         if prefs:
             msg += f" · Filters: {', '.join(prefs)}"
         st.success(msg)
+        st.toast("Preferences saved!")

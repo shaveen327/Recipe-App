@@ -23,13 +23,14 @@ def get_gemini_key():
 with st.sidebar:
     st.header("Advanced Settings")
 
-    max_prep = st.slider("Max Prep Time (minutes)", 5, 120, 60)
-    max_calories = st.slider("Max Calories", 200, 1500, 800)
-    number_results = st.slider("Number of Recipes", 1, 10, 5)
+    max_prep = st.slider("Max Prep Time (minutes)", 5, 120, 60, key="max_prep")
+    max_calories = st.slider("Max Calories", 200, 1500, 800, key="max_calories")
+    number_results = st.slider("Number of Recipes", 1, 10, 5, key="num_results")
 
     diet = st.selectbox(
         "Diet Type",
-        ["None", "vegetarian", "vegan", "gluten free", "ketogenic"]
+        ["None", "vegetarian", "vegan", "gluten free", "ketogenic"],
+        key="diet_type"
     )
 
     st.markdown("---")
@@ -130,101 +131,114 @@ html, body, [data-testid="stAppViewContainer"] {{
 
 st.title("Recipe Finder")
 
-search_query = st.text_input("Search recipes...")
+# ✅ FIX 2: Input validation
+search_query = st.text_input("Search recipes...", key="search_query")
 
 st.subheader("Recipe Suggestions")
 
-if search_query:
+if not search_query or search_query.strip() == "":
+    st.warning("Please enter a recipe search term.")
+    st.stop()
 
-    with st.spinner("Fetching recipes..."):
-        recipes, status = search_recipes(
-            search_query,
-            max_prep,
-            number_results,
-            diet
-        )
+# ✅ FIX 3A: toast feedback
+st.toast("Searching recipes...")
 
-    if status == "401":
-        st.error("API key invalid.")
-    elif status == "404":
-        st.error("No results found.")
-    elif status == "429":
-        st.error("Rate limit exceeded.")
-    elif status == "500":
-        st.error("Server error.")
-    elif status == "timeout":
-        st.error("Connection timeout.")
-    elif status == "empty":
-        st.warning("No recipes found.")
+# ✅ FIX 3B: status tracking instead of basic spinner
+with st.status("Fetching recipes...", expanded=False) as status:
 
-    elif status == "ok":
+    status.update(label="Calling Spoonacular API...")
 
-        filtered_recipes = []
+    recipes, status_code = search_recipes(
+        search_query,
+        max_prep,
+        number_results,
+        diet
+    )
 
-        for r in recipes:
-            nutrients = r.get("nutrition", {}).get("nutrients", [])
+    status.update(label="Processing results...")
 
-            calories = None
-            for n in nutrients:
-                if n.get("name") == "Calories":
-                    calories = n.get("amount")
+if status_code == "401":
+    st.error("API key invalid.")
+elif status_code == "404":
+    st.error("No results found.")
+elif status_code == "429":
+    st.error("Rate limit exceeded.")
+elif status_code == "500":
+    st.error("Server error.")
+elif status_code == "timeout":
+    st.error("Connection timeout.")
+elif status_code == "empty":
+    st.warning("No recipes found.")
 
-            if calories is None or calories <= max_calories:
-                r["calories"] = calories
-                filtered_recipes.append(r)
+elif status_code == "ok":
 
-        recipes = filtered_recipes
+    filtered_recipes = []
 
-        st.success("Recipes found!")
+    for r in recipes:
+        nutrients = r.get("nutrition", {}).get("nutrients", [])
 
-        for r in recipes:
+        calories = None
+        for n in nutrients:
+            if n.get("name") == "Calories":
+                calories = n.get("amount")
 
-            st.markdown(f"""
+        if calories is None or calories <= max_calories:
+            r["calories"] = calories
+            filtered_recipes.append(r)
+
+    recipes = filtered_recipes
+
+    st.success("Recipes found!")
+    st.toast("Recipes loaded successfully!")
+
+    for r in recipes:
+
+        st.markdown(f"""
 ### {r['title']}
 ⏱ Prep Time: {r.get('readyInMinutes', 'N/A')} min  
 Calorie Amount: {r.get('calories', 'N/A')}
 """)
 
-            if r.get("image"):
-                st.image(r["image"], width=200)
+        if r.get("image"):
+            st.image(r["image"], width=200)
 
-            with st.spinner("Generating description..."):
-                description = generate_description(r, search_query)
+        with st.spinner("Generating description..."):
+            description = generate_description(r, search_query)
 
-            st.markdown("Description")
-            st.write(description)
+        st.markdown("Description")
+        st.write(description)
 
-            ingredients = r.get("extendedIngredients", [])
+        ingredients = r.get("extendedIngredients", [])
 
-            if ingredients:
-                ingredient_text = " • ".join(
-                    [
-                        (ing.get("original") or ing.get("name"))
-                        for ing in ingredients
-                        if ing.get("original") or ing.get("name")
-                    ]
-                )
+        if ingredients:
+            ingredient_text = " • ".join(
+                [
+                    (ing.get("original") or ing.get("name"))
+                    for ing in ingredients
+                    if ing.get("original") or ing.get("name")
+                ]
+            )
 
-                st.markdown("Ingredients:")
+            st.markdown("Ingredients:")
 
-                st.markdown(
-                    f"""
-                    <div style="
-                        background:{CREAM};
-                        padding:10px 12px;
-                        border-radius:10px;
-                        line-height:1.6;
-                        font-size:13px;
-                    ">
-                        {ingredient_text}
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            else:
-                st.caption("No ingredients available.")
+            st.markdown(
+                f"""
+                <div style="
+                    background:{CREAM};
+                    padding:10px 12px;
+                    border-radius:10px;
+                    line-height:1.6;
+                    font-size:13px;
+                ">
+                    {ingredient_text}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.caption("No ingredients available.")
 
-            st.markdown("---")
+        st.markdown("---")
 
 else:
     st.info("Search for a recipe to get results.")

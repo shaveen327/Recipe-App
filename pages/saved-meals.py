@@ -214,9 +214,13 @@ if show_form:
     col_submit, col_reset = st.columns([1, 1])
     with col_submit:
         if st.button("Submit Rating", key="submit_rating_btn"):
+            if not meal_to_rate:
+                st.warning("Select a meal.")
+                st.stop()
             st.session_state.meal_ratings[meal_to_rate] = star_rating
+            st.toast("Rating saved!")
             st.success(f"✅ Rated **{meal_to_rate}**: {'⭐' * star_rating}")
-            st.rerun()
+            
     with col_reset:
         st.button("🔄 Clear Form", key="clear_rating_form_btn", on_click=reset_rating_form)
 
