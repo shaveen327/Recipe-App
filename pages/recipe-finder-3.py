@@ -83,8 +83,9 @@ def generate_description(recipe, query):
         genai.configure(api_key=get_gemini_key())
         model = genai.GenerativeModel("models/gemini-2.5-flash")
 
-        prompt = f"""
-You are a recipe description assistant.
+        # Technique 1: Structured output — enforces exact 3-sentence format and scope rules
+        # Technique 2: Few-shot — two examples anchor the tone and sentence structure
+        prompt = f"""You are a recipe description assistant.
 
 RULES:
 - Write EXACTLY 3 sentences
@@ -92,10 +93,20 @@ RULES:
 - Do NOT add greetings or personality
 - Keep tone neutral and app-like
 
-Sentence 1: what the dish is  
-Sentence 2: why it's good for students  
+Sentence 1: what the dish is
+Sentence 2: why it's good for students
 Sentence 3: taste/texture description
 
+Examples:
+User search: pasta
+Recipe title: Spaghetti Aglio e Olio
+Description: Spaghetti Aglio e Olio is a classic Italian pasta dish finished with olive oil and garlic. It comes together in under 20 minutes making it ideal for busy class nights. The result is silky and savory with a mild garlicky warmth.
+
+User search: soup
+Recipe title: Tomato Basil Soup
+Description: Tomato Basil Soup is a smooth, blended soup with a bright tomato base. It reheats well and pairs with a sandwich for an easy dorm-friendly meal. The flavor is tangy and slightly sweet with a fresh herbal finish.
+
+Now describe this recipe:
 User search: {query}
 
 Recipe:
@@ -139,6 +150,9 @@ st.subheader("Recipe Suggestions")
 if not search_query or search_query.strip() == "":
     st.warning("Please enter a recipe search term.")
     st.stop()
+
+if len(search_query) > 2000:
+    st.warning("Your search is very long (over 2000 characters). Consider shortening it for better results.")
 
 st.toast("Searching recipes...")
 
@@ -189,7 +203,6 @@ elif status_code == "ok":
     st.success("Recipes found!")
     st.toast("Recipes loaded successfully!")
 
-    # Chart
     df = pd.DataFrame([
         {
             "title": r["title"],
@@ -203,7 +216,6 @@ elif status_code == "ok":
     st.subheader("Calories per Recipe")
     st.bar_chart(df.set_index("title")["calories"])
 
-    # Recipes
     for r in recipes:
 
         st.markdown(f"""
