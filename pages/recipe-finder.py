@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import google.generativeai as genai
+import pandas as pd
 
 PRIMARY = "#8fa98c"
 DARK = "#4a7a50"
@@ -131,7 +132,6 @@ html, body, [data-testid="stAppViewContainer"] {{
 
 st.title("Recipe Finder")
 
-# ✅ FIX 2: Input validation
 search_query = st.text_input("Search recipes...", key="search_query")
 
 st.subheader("Recipe Suggestions")
@@ -140,10 +140,8 @@ if not search_query or search_query.strip() == "":
     st.warning("Please enter a recipe search term.")
     st.stop()
 
-# ✅ FIX 3A: toast feedback
 st.toast("Searching recipes...")
 
-# ✅ FIX 3B: status tracking instead of basic spinner
 with st.status("Fetching recipes...", expanded=False) as status:
 
     status.update(label="Calling Spoonacular API...")
@@ -191,6 +189,21 @@ elif status_code == "ok":
     st.success("Recipes found!")
     st.toast("Recipes loaded successfully!")
 
+    # Chart
+    df = pd.DataFrame([
+        {
+            "title": r["title"],
+            "calories": r.get("calories", 0)
+        }
+        for r in recipes
+    ])
+
+    df = df.dropna()
+
+    st.subheader("Calories per Recipe")
+    st.bar_chart(df.set_index("title")["calories"])
+
+    # Recipes
     for r in recipes:
 
         st.markdown(f"""
