@@ -16,6 +16,10 @@ if "month" not in st.session_state:
 if "year" not in st.session_state:
     st.session_state.year = 2024
 
+# Success Flag
+if "meal_added" not in st.session_state:
+    st.session_state.meal_added = False
+
 # Colors
 PRIMARY = "#8fa98c"
 DARK = "#4a7a50"
@@ -101,9 +105,8 @@ html, body, [data-testid="stAppViewContainer"] {{
     line-height: 1.3;
 }}
 
-/* ✅ REMOVED CREAM BAR */
 .calendar-wrap {{
-    background: transparent;   /* was cream */
+    background: transparent;
     padding: 0;
     margin-top: 0;
 }}
@@ -174,7 +177,6 @@ tab1, tab2, tab3 = st.tabs(["Month", "Week", "Day"])
 
 # Month View
 with tab1:
-
     col1, col2, col3 = st.columns([2, 1, 2])
 
     with col2:
@@ -219,7 +221,6 @@ with tab1:
 
     for week in cal:
         cols = st.columns(7)
-
         for i, day in enumerate(week):
             with cols[i]:
                 if day == 0:
@@ -248,14 +249,12 @@ with tab2:
     meals = get_meals(month, year)
 
     cal = calendar.monthcalendar(year, month)
-
     week_index = st.selectbox("Select Week", list(range(1, len(cal) + 1))) - 1
     week = cal[week_index]
 
     st.markdown('<div class="week-card">', unsafe_allow_html=True)
 
     cols = st.columns(7)
-
     for i, day in enumerate(week):
         with cols[i]:
             if day == 0:
@@ -291,15 +290,10 @@ with tab2:
 
 # Day View
 with tab3:
-    selected = st.date_input(
-        "Pick a day",
-        date(st.session_state.year, st.session_state.month, 1)
-    )
-
+    selected = st.date_input("Pick a day", date(st.session_state.year, st.session_state.month, 1))
     meals = get_meals(selected.month, selected.year).get(selected.day, [])
 
     st.markdown('<div class="day-card">', unsafe_allow_html=True)
-
     st.subheader(selected.strftime("%B %d"))
 
     if meals:
@@ -309,6 +303,12 @@ with tab3:
         st.warning("No meals planned.")
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+# Success and Toast
+if st.session_state.meal_added:
+    st.toast("Meal added successfully!")
+    st.success("✅ Meal added to your calendar.")
+    st.session_state.meal_added = False
 
 # Add Meal
 st.markdown("### ➕ Add Meal")
@@ -330,7 +330,10 @@ if st.button("Add Meal"):
             "type": meal_type,
             "name": meal_name
         })
+        st.session_state.meal_added = True
         st.rerun()
+    else:
+        st.warning("Please enter a meal name.")
 
 if st.session_state.saved_meals:
     st.write("**Your planned meals:**")
